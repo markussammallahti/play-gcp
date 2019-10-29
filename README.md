@@ -7,7 +7,7 @@
 #### Add dependency
 ```
 resolvers += Resolver.bintrayRepo("mrks", "maven")
-libraryDependencies += "mrks" %% "play-gcp" % "0.1"
+libraryDependencies += "mrks" %% "play-gcp" % "0.2"
 ```
 
 #### Setup authentication

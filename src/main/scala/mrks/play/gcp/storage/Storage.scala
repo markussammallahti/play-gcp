@@ -1,14 +1,18 @@
 package mrks.play.gcp.storage
 
+import java.io.{InputStream, OutputStream}
+import java.net.URL
 import java.nio.channels.Channels
+import java.util.concurrent.TimeUnit
 
 import akka.stream.IOResult
 import akka.stream.scaladsl.{Sink, Source, StreamConverters}
 import akka.util.ByteString
 import com.google.cloud.storage.Storage.CopyRequest
-import com.google.cloud.storage.{BlobInfo, Storage => StorageService}
+import com.google.cloud.storage.{Storage => StorageService}
 import javax.inject.Inject
 
+import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.{Failure, Success, Try}
 
@@ -17,18 +21,12 @@ trait Storage {
 
   def service: StorageService
 
-  private def blobInfo(blobId: BlobId, contentType: Option[String]) = {
-    val builder = BlobInfo.newBuilder(blobId.asJava)
-    contentType.foreach(builder.setContentType)
-    builder.build
-  }
-
   def get(blobId: BlobId): Future[Option[Blob]] = {
     Future(blocking(Option(service.get(blobId.asJava)).map(Blob.fromJava)))
   }
 
   def create(blobId: BlobId, contentType: String, data: ByteString): Future[Blob] = {
-    Future(blocking(Blob.fromJava(service.create(blobInfo(blobId, Some(contentType)), data.toArray))))
+    Future(blocking(Blob.fromJava(service.create(BlobInfo(blobId, contentType).asJava, data.toArray))))
   }
 
   def copy(from: Blob, to: BlobId): Future[Blob] = {
@@ -46,17 +44,29 @@ trait Storage {
   }
 
   def source(blob: Blob): Source[ByteString, Future[IOResult]] = {
-    StreamConverters.fromInputStream(() => Channels.newInputStream(service.reader(blob.id.asJava)))
+    StreamConverters.fromInputStream(() => inputStream(blob.id))
   }
 
-  def sink(blobId: BlobId, contentType: Option[String] = None): Sink[ByteString, Future[Try[Blob]]] = {
-    StreamConverters.fromOutputStream(() => Channels.newOutputStream(service.writer(blobInfo(blobId, contentType)))).mapMaterializedValue(_.flatMap {
+  def inputStream(blobId: BlobId): InputStream = {
+    Channels.newInputStream(service.reader(blobId.asJava))
+  }
+
+  def sink(info: BlobInfo): Sink[ByteString, Future[Try[Blob]]] = {
+    StreamConverters.fromOutputStream(() => outputStream(info)).mapMaterializedValue(_.flatMap {
       case IOResult(_, Failure(e)) =>
         Future.successful(Failure(e))
 
       case _ =>
-        Future(blocking(Success(Blob.fromJava(service.get(blobId.asJava)))))
+        Future(blocking(Success(Blob.fromJava(service.get(info.id.asJava)))))
     })
+  }
+
+  def outputStream(info: BlobInfo): OutputStream = {
+    Channels.newOutputStream(service.writer(info.asJava))
+  }
+
+  def signUrl(info: BlobInfo, duration: Duration, options: SignUrlOption*): URL = {
+    service.signUrl(info.asJava, duration.toMillis, TimeUnit.MILLISECONDS, options.map(_.asJava):_*)
   }
 }
 

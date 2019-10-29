@@ -71,7 +71,7 @@ class StorageSpec extends WordSpec
 
   "Sink" should {
     "create sink for given blob id" in {
-      val sink    = storage.sink(BlobId(testBucket, "sink"), Some("text/plain"))
+      val sink    = storage.sink(BlobInfo(BlobId(testBucket, "sink"), "text/plain"))
       val result  = Source(List(testContent, testContent)).runWith(sink).futureValue
       val blob    = result.success.value
 

@@ -1,7 +1,7 @@
 package mrks.play.gcp.parser
 
 import javax.inject.Inject
-import mrks.play.gcp.storage.{Blob, Storage}
+import mrks.play.gcp.storage.{Blob, BlobInfo, Storage}
 import play.api.libs.streams.Accumulator
 import play.api.mvc.MultipartFormData.FilePart
 import play.api.mvc.{BodyParser, MultipartFormData, PlayBodyParsers}
@@ -20,7 +20,7 @@ trait GcpBodyParsers {
   def multipartFormData: BodyParser[MultipartFormData[Blob]] = playBodyParsers.multipartFormData(storageHandler)
 
   private def storageHandler: Multipart.FilePartHandler[Blob] = { info =>
-    Accumulator(storage.sink(temporaryBlobIdCreator.create(info), info.contentType)).mapFuture {
+    Accumulator(storage.sink(BlobInfo(temporaryBlobIdCreator.create(info), info.contentType))).mapFuture {
       case Failure(error) =>
         Future.failed(error)
 
